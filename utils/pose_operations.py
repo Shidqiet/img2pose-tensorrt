@@ -252,7 +252,7 @@ def transform_pose_global_project_bbox(
     device = dofs.device
 
     boxes = boxes.cpu().numpy()
-    dofs = dofs.cpu().numpy()
+    dofs = dofs.cpu().detach().numpy()
 
     threed_68_points = threed_68_points.numpy()
 

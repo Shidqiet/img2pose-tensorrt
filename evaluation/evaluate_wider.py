@@ -6,12 +6,19 @@ import time
 import numpy as np
 from PIL import Image, ImageOps
 from torchvision import transforms
+import torch
+from torchvision.datasets import CocoDetection
 from tqdm import tqdm
 
 sys.path.append("./")
 from img2pose import img2poseModel
 from model_loader import load_model
 
+from pycocotools.coco import COCO
+from pycocotools.cocoeval import COCOeval
+
+def collate_fn(batch):
+    return list(zip(*batch))
 
 class WIDER_Eval:
     def __init__(self, args):
@@ -20,15 +27,15 @@ class WIDER_Eval:
         self.pose_mean = np.load(args.pose_mean)
         self.pose_stddev = np.load(args.pose_stddev)
 
-        self.test_dataset = self.get_dataset(args)
-        self.dataset_path = args.dataset_path
+        # self.test_dataset = self.get_dataset(args)
+        # self.dataset_path = args.dataset_path
         self.img2pose_model = self.create_model(args)
 
         self.transform = transforms.Compose([transforms.ToTensor()])
         self.min_size = args.min_size
         self.max_size = args.max_size
         self.flip = len(args.min_size) > 1
-        self.output_path = args.output_path
+        # self.output_path = args.output_path
 
     def create_model(self, args):
         img2pose_model = img2poseModel(
@@ -66,7 +73,6 @@ class WIDER_Eval:
         # bboxes: a numpy array of N*5 size representing N boxes;
         #         for each box, it is represented as [x1, y1, x2, y2, s]
         # iou_thresh: group bounding boxes if their overlap is > threshold.
-
         order = bboxes[:, 4].ravel().argsort()[::-1]
         bboxes = bboxes[order, :]
         areas = (bboxes[:, 2] - bboxes[:, 0] + 1) * (bboxes[:, 3] - bboxes[:, 1] + 1)
@@ -113,10 +119,13 @@ class WIDER_Eval:
     def test(self):
         times = []
 
-        for img_path in tqdm(self.test_dataset):
-            img_full_path = os.path.join(self.dataset_path, img_path)
-            img = Image.open(img_full_path).convert("RGB")
-
+        annFile = 'wider_face_cocoset/coco_face_validation.json'
+        dataset = CocoDetection(root='wider_face_cocoset/validation', 
+                    annFile=annFile)
+        data_loader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, collate_fn=collate_fn)
+        pred_result = []
+        for imgs, labels in tqdm(data_loader):
+            img = imgs[0]
             bboxes = []
 
             (w, h) = img.size
@@ -146,14 +155,12 @@ class WIDER_Eval:
                         )
 
                     time1 = time.time()
-
                     res = self.img2pose_model.predict([self.transform(run_img)])
 
                     time2 = time.time()
                     times.append(time2 - time1)
 
                     res = res[0]
-
                     for i in range(len(res["scores"])):
                         bbox = res["boxes"].cpu().numpy()[i].astype("int")
                         score = res["scores"].cpu().numpy()[i]
@@ -175,23 +182,27 @@ class WIDER_Eval:
             if np.ndim(bboxes) == 1 and len(bboxes) > 0:
                 bboxes = bboxes[np.newaxis, :]
 
-            output_path = os.path.join(self.output_path, os.path.split(img_path)[0])
+            if len(bboxes)>0:
+                for box in bboxes:
+                    box_coco = [round(box[0]), round(box[1]), round((box[2]-box[0])), round((box[3]-box[1]))]
+                    score = float(box[4])
+                    pred_result.append({"image_id": int(labels[0][0]['image_id']), "category_id": 1,"bbox": box_coco, "score":score})
+        # initialize COCO ground truth api, set the path of accordingly
+        cocoGt = COCO(annFile)
 
-            if not os.path.exists(output_path):
-                os.makedirs(output_path)
+        pred_result = [dt for dt in pred_result if dt['score'] > 0.01] #filter lower
 
-            file_name = os.path.split(img_path)[-1]
-            f = open(os.path.join(output_path, file_name[:-4] + ".txt"), "w")
-            f.write(file_name + "\n")
-            f.write(str(len(bboxes)) + "\n")
-            for i in range(len(bboxes)):
-                bbox = bboxes[i]
+        # load detection file
+        cocoDt = cocoGt.loadRes(pred_result)
 
-                f.write(
-                    f"{bbox[0]} {bbox[1]} {bbox[2]-bbox[0]} {bbox[3]-bbox[1]} {bbox[4]}\n"
-                )
-            f.close()
+        imgIds = sorted(cocoGt.getImgIds())
 
+        # running evaluation
+        cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
+        cocoEval.params.imgIds = imgIds
+        cocoEval.evaluate()
+        cocoEval.accumulate()
+        cocoEval.summarize()
         print(f"Average time forward pass: {np.mean(np.asarray(times))}")
 
 
@@ -202,7 +213,7 @@ def parse_args():
     parser.add_argument(
         "--min_size",
         help="Min size",
-        default="200, 300, 500, 800, 1100, 1400, 1700",
+        default="600",
         type=str,
     )
     parser.add_argument("--max_size", help="Max size", default=1400, type=int)
@@ -223,13 +234,13 @@ def parse_args():
     )
 
     # training/validation configuration
-    parser.add_argument("--output_path", help="Path to save predictions", required=True)
-    parser.add_argument("--dataset_path", help="Path to the dataset", required=True)
+    # parser.add_argument("--output_path", help="Path to save predictions", required=True)
+    # parser.add_argument("--dataset_path", help="Path to the dataset", required=True)
     parser.add_argument("--dataset_list", help="Dataset list.")
 
     # resume from or load pretrained weights
     parser.add_argument(
-        "--pretrained_path", help="Path to pretrained weights.", type=str
+        "--pretrained_path", help="Path to pretrained weights.", type=str, default='models/img2pose_v1.pth'
     )
     parser.add_argument("--nms_threshold", default=0.6, type=float)
 
@@ -249,6 +260,5 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-
     wider_eval = WIDER_Eval(args)
     wider_eval.test()
