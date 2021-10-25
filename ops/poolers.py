@@ -2,7 +2,7 @@ import torch
 from torch import nn, Tensor
 
 import torchvision
-# from torchvision.ops import roi_align
+from torchvision.ops import roi_align
 from .roi_align import roi_align
 from torchvision.ops.boxes import box_area
 
@@ -246,30 +246,30 @@ class MultiScaleRoIAlign(nn.Module):
             device=device,
         )
 
-        # tracing_results = []
-        # for level, (per_level_feature, scale) in enumerate(zip(x_filtered, scales)):
-        #     idx_in_level = torch.where(levels == level)[0]
-        #     rois_per_level = rois[idx_in_level]
+        tracing_results = []
+        for level, (per_level_feature, scale) in enumerate(zip(x_filtered, scales)):
+            idx_in_level = torch.where(levels == level)[0]
+            rois_per_level = rois[idx_in_level]
 
-        #     result_idx_in_level = roi_align(
-        #         per_level_feature, rois_per_level,
-        #         output_size=self.output_size,
-        #         spatial_scale=scale, sampling_ratio=self.sampling_ratio)
+            result_idx_in_level = roi_align(
+                per_level_feature, rois_per_level,
+                output_size=self.output_size,
+                spatial_scale=scale, sampling_ratio=self.sampling_ratio)
 
-            # if torchvision._is_tracing():
-            #     tracing_results.append(result_idx_in_level.to(dtype))
-            # else:
-            #     # result and result_idx_in_level's dtypes are based on dtypes of different
-            #     # elements in x_filtered.  x_filtered contains tensors output by different
-            #     # layers.  When autocast is active, it may choose different dtypes for
-            #     # different layers' outputs.  Therefore, we defensively match result's dtype
-            #     # before copying elements from result_idx_in_level in the following op.
-            #     # We need to cast manually (can't rely on autocast to cast for us) because
-            #     # the op acts on result in-place, and autocast only affects out-of-place ops.
-            # result[idx_in_level] = result_idx_in_level.to(result.dtype)
+            if torchvision._is_tracing():
+                tracing_results.append(result_idx_in_level.to(dtype))
+            else:
+                # result and result_idx_in_level's dtypes are based on dtypes of different
+                # elements in x_filtered.  x_filtered contains tensors output by different
+                # layers.  When autocast is active, it may choose different dtypes for
+                # different layers' outputs.  Therefore, we defensively match result's dtype
+                # before copying elements from result_idx_in_level in the following op.
+                # We need to cast manually (can't rely on autocast to cast for us) because
+                # the op acts on result in-place, and autocast only affects out-of-place ops.
+            result[idx_in_level] = result_idx_in_level.to(result.dtype)
 
-        # if torchvision._is_tracing():
-        #     result = _onnx_merge_levels(levels, tracing_results)
+        if torchvision._is_tracing():
+            result = _onnx_merge_levels(levels, tracing_results)
 
         return result
 
