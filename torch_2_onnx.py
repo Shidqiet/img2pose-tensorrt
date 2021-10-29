@@ -1,15 +1,16 @@
 import numpy as np
 from PIL import Image
-from torchvision import transforms
-import cv2
 
-from img2pose import img2poseModel
-from model_loader import load_model
-
-import torch.onnx
 import onnx
+import torch.onnx
 import onnxruntime
 from onnxsim import simplify
+from torchvision import transforms
+
+import sys
+sys.path.append("./img2pose-modified")
+from img2pose import img2poseModel
+from model_loader import load_model
 
 if __name__ == "__main__":
     # setup model 
@@ -18,7 +19,7 @@ if __name__ == "__main__":
     max_size = 1400
     pose_mean = np.load('models/WIDER_train_pose_mean_v1.npy')
     pose_stddev = np.load('models/WIDER_train_pose_stddev_v1.npy')
-    threed_68_points = np.load('pose_references/reference_3d_68_points_trans.npy')
+    threed_68_points = np.load('img2pose-modified/pose_references/reference_3d_68_points_trans.npy')
     pretrained_path = 'models/img2pose_v1.pth'
     img2pose_model = img2poseModel(
         depth,

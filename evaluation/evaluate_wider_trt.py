@@ -21,7 +21,7 @@ from torchvision.datasets import CocoDetection
 import trt_infer_base.infer as infer_utils
 
 import sys
-sys.path.append("./")
+sys.path.append("./img2pose-modified")
 from img2pose import img2poseModel
 from model_loader import load_model
 
@@ -35,10 +35,10 @@ image_mean = [0.485, 0.456, 0.406]
 image_std = [0.229, 0.224, 0.225]
 depth = 18
 min_size = 600
-max_size = 600
+max_size = 1400
 pose_mean = np.load('models/WIDER_train_pose_mean_v1.npy')
 pose_stddev = np.load('models/WIDER_train_pose_stddev_v1.npy')
-threed_68_points = np.load('pose_references/reference_3d_68_points_trans.npy')
+threed_68_points = np.load('img2pose-modified/pose_references/reference_3d_68_points_trans.npy')
 pretrained_path = 'models/img2pose_v1.pth'
 num_anchors_per_level = [69312, 17328, 4332, 1083, 300]
 
@@ -256,11 +256,11 @@ if __name__ == "__main__":
                             round((box[2]*scale_w)-(box[0]*scale_w)), 
                             round((box[3]*scale_h)-(box[1]*scale_h))]
                 score = float(box[4])
-                # if score > 0.8:
-                #     cv2.rectangle(orig_img, (box_coco[0], box_coco[1]), (box_coco[0]+box_coco[2], box_coco[1]+box_coco[3]), (0, 0, 255), 2)
+                if score > 0.8:
+                    cv2.rectangle(orig_img, (box_coco[0], box_coco[1]), (box_coco[0]+box_coco[2], box_coco[1]+box_coco[3]), (0, 0, 255), 2)
                 pred_result.append({"image_id": int(labels[0][0]['image_id']), "category_id": 1,"bbox": box_coco, "score":score})
-        # cv2.imwrite('test.jpg', orig_img)
-        # exit()
+        cv2.imwrite('test.jpg', orig_img)
+        exit()
         infer_time = time.time()-inference_start_time
         trt_time.append(infer_time)	
         interval = time.time()-p_utiltime
