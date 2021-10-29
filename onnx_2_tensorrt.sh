@@ -1,0 +1,1 @@
+trtexec --onnx=onnx_model/img2pose_sim.onnx --saveEngine=onnx_model/img2pose_sim.trt --verbose

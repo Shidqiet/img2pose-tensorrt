@@ -2,6 +2,7 @@ import numpy as np
 from PIL import Image
 from torchvision import transforms
 import cv2
+import torch
 
 from img2pose import img2poseModel
 from model_loader import load_model

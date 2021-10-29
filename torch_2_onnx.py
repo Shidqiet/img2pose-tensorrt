@@ -15,7 +15,7 @@ if __name__ == "__main__":
     # setup model 
     depth = 18
     min_size = 600
-    max_size = 600
+    max_size = 1400
     pose_mean = np.load('models/WIDER_train_pose_mean_v1.npy')
     pose_stddev = np.load('models/WIDER_train_pose_stddev_v1.npy')
     threed_68_points = np.load('pose_references/reference_3d_68_points_trans.npy')
@@ -52,10 +52,11 @@ if __name__ == "__main__":
                     opset_version=11,          # the ONNX version to export the model to
                     do_constant_folding=True,  # whether to execute constant folding for optimization
                     input_names = ['input'],   # the model's input names
-                    output_names = ['objectness', 'levels', 'proposals'])# the model's output names
+                    output_names = ['features_0', 'features_1', 'features_2', 'features_3', 'features_pools', 
+                                    'objectness', 'levels', 'proposals'])# the model's output names
 
     # check onnx model
-    onnx_model = onnx.load("evaluation/model/img2pose/img2pose.onnx")
+    onnx_model = onnx.load("onnx_model/img2pose.onnx")
     onnx.checker.check_model(onnx_model)
 
     # check torch , onnx and onnx simplified model output
@@ -81,25 +82,7 @@ if __name__ == "__main__":
     ort_sim_out = ort_session.run(None, {ort_session.get_inputs()[0].name: img.numpy()})
 
     # Uncomment to see
-    # print(torch_out)
-    # print(ort_out)
-    # print(ort_sim_out)
-
-    image = cv2.imread('selfie.jpg')
-    image = cv2.resize(image, (600,600))
-    image = image.transpose(2, 0, 1)
-    image = image.astype(np.float32)
-    INPUT_SHAPE = (3, 600, 600)  # channel, height, width
-    trt_inference_wrapper = infer_utils.TRTInference(
-        model_dir="evaluation/model/",
-        input_shape=INPUT_SHAPE,
-        precision="FLOAT",
-        calib_dataset=None,
-        batch_size=1,
-        channel_first=True,
-        silent=False)
-
-    outputs = trt_inference_wrapper.infer(image)
-    print(outputs)
-    trt_inference_wrapper.close()
+    print(torch_out)
+    print(ort_out)
+    print(ort_sim_out)
     

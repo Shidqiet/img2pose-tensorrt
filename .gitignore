@@ -139,3 +139,4 @@ wider_face_cocoset
 *.jpg
 *.engine
 onnx_model/
+*.yaml

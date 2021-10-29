@@ -62,4 +62,4 @@ class GeneralizedRCNN(nn.Module):
         #     detections, images.image_sizes, original_image_sizes
         # )
         # return proposals, proposals_scores
-        return objectness, levels, proposals
+        return features, objectness, levels, proposals
