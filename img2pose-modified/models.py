@@ -9,18 +9,11 @@ from rpn import AnchorGenerator, RegionProposalNetwork, RPNHead
 from utils.pose_operations import transform_pose_global_project_bbox
 from torchvision.models.detection.faster_rcnn import TwoMLPHead
 
-# TODO: move to inference script
 import torchvision.models.detection._utils as det_utils
 from torchvision.models.detection.roi_heads import RoIHeads
 from torchvision.models.detection.transform import GeneralizedRCNNTransform
 from torchvision.ops import MultiScaleRoIAlign
 from torchvision.ops import boxes as box_ops
-
-# TODO: for next improvement
-# from utils import det_utils
-# from roi_heads import RoIHeads
-# from ops import boxes as box_ops
-# from ops.poolers import MultiScaleRoIAlign
 
 
 class FastRCNNDoFPredictor(nn.Module):

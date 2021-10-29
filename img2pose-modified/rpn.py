@@ -5,14 +5,8 @@ from torch.jit.annotations import Dict, List, Optional, Tuple
 from torch.nn import functional as F
 from torchvision.models.detection.image_list import ImageList
 
-# TODO: pindah ke script inference
 from torchvision.ops import boxes as box_ops
 from torchvision.models.detection import _utils as det_utils
-
-# TODO: for next improvement
-# import utils.det_utils as det_utils
-# import ops.boxes as box_ops
-
 
 @torch.jit.unused
 def _onnx_get_num_anchors_and_pre_nms_top_n(ob, orig_pre_nms_top_n):
