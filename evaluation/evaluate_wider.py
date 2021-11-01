@@ -10,7 +10,7 @@ import torch
 from torchvision.datasets import CocoDetection
 from tqdm import tqdm
 
-sys.path.append("./")
+sys.path.append("./img2pose")
 from img2pose import img2poseModel
 from model_loader import load_model
 
@@ -248,7 +248,7 @@ def parse_args():
         "--threed_68_points",
         type=str,
         help="Reference 3D points to compute pose.",
-        default="./pose_references/reference_3d_68_points_trans.npy",
+        default="./img2pose/pose_references/reference_3d_68_points_trans.npy",
     )
 
     args = parser.parse_args()

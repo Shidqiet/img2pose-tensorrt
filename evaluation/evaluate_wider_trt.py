@@ -8,6 +8,7 @@ from collections import OrderedDict
 
 import numpy as np
 import cv2
+from imgpl_utils.image import letterbox_resize
 
 import torch
 from torchvision import transforms
@@ -85,66 +86,72 @@ def get_roi_heads():
 
 def preprocess_img(orig_img):
     orig_img = np.array(orig_img)
-    img = cv2.resize(orig_img, (600,600))
+    img, resize_ratio, pad_w, pad_h = letterbox_resize(orig_img, 600, 600)
+    # cv2.imwrite('test.jpg', infer_img)
+    # exit()
+    # img = cv2.resize(orig_img, (600,600))
     img = img.transpose(2, 0, 1)
     img = img.astype(np.float32)
     infer_img = np.divide(img, 255)
-    return orig_img, infer_img
+    # return orig_img, infer_img
+    return orig_img, infer_img, 1/resize_ratio, pad_w, pad_h
 
-# def _get_top_n_idx(objectness, num_anchors_per_level):
-#     r = []
-#     offset = 0
-#     for ob in objectness.split(num_anchors_per_level, 1):
-#         num_anchors = ob.shape[1]
-#         pre_nms_top_n = min(6000, num_anchors)
-#         _, top_n_idx = ob.topk(pre_nms_top_n, dim=1)
-#         r.append(top_n_idx + offset)
-#         offset += num_anchors
-#     return torch.cat(r, dim=1)
+def _get_top_n_idx(objectness, num_anchors_per_level):
+    r = []
+    offset = 0
+    for ob in objectness.split(num_anchors_per_level, 1):
+        num_anchors = ob.shape[1]
+        pre_nms_top_n = min(6000, num_anchors)
+        _, top_n_idx = ob.topk(pre_nms_top_n, dim=1)
+        r.append(top_n_idx + offset)
+        offset += num_anchors
+    return torch.cat(r, dim=1)
 
-# def filter_proposals(proposals, objectness, image_shapes, num_anchors_per_level):
-#     num_images = proposals.shape[0]
-#     device = proposals.device
-#     # do not backprop throught objectness
-#     objectness = objectness.detach()
-#     objectness = objectness.reshape(num_images, -1)
+def filter_proposals(proposals, objectness, image_shapes, num_anchors_per_level):
+    num_images = proposals.shape[0]
+    device = proposals.device
+    # do not backprop throught objectness
+    objectness = objectness.detach()
+    objectness = objectness.reshape(num_images, -1)
 
-#     levels = [
-#         torch.full((n,), idx, dtype=torch.int64, device=device)
-#         for idx, n in enumerate(num_anchors_per_level)
-#     ]
-#     levels = torch.cat(levels, 0)
-#     levels = levels.reshape(1, -1).expand_as(objectness)
+    levels = [
+        torch.full((n,), idx, dtype=torch.int64, device=device)
+        for idx, n in enumerate(num_anchors_per_level)
+    ]
+    levels = torch.cat(levels, 0)
+    levels = levels.reshape(1, -1).expand_as(objectness)
 
-#     # select top_n boxes independently per level before applying nms
-#     top_n_idx = _get_top_n_idx(objectness, num_anchors_per_level)
+    # select top_n boxes independently per level before applying nms
+    top_n_idx = _get_top_n_idx(objectness, num_anchors_per_level)
 
-#     image_range = torch.arange(num_images, device=device)
-#     batch_idx = image_range[:, None]
+    image_range = torch.arange(num_images, device=device)
+    batch_idx = image_range[:, None]
 
-#     objectness = objectness[batch_idx, top_n_idx]
-#     levels = levels[batch_idx, top_n_idx]
-#     proposals = proposals[batch_idx, top_n_idx]
+    objectness = objectness[batch_idx, top_n_idx]
+    levels = levels[batch_idx, top_n_idx]
+    proposals = proposals[batch_idx, top_n_idx]
 
-#     final_boxes = []
-#     for boxes, scores, lvl, img_shape in zip(
-#         proposals, objectness, levels, image_shapes
-#     ):
-#         boxes = box_ops.clip_boxes_to_image(boxes, img_shape)
-#         keep = box_ops.remove_small_boxes(boxes, 1e-3)
-#         boxes, scores, lvl = boxes[keep], scores[keep], lvl[keep]
-#         # non-maximum suppression, independently done per level
-#         keep = box_ops.batched_nms(boxes, scores, lvl, 0.4)
-#         # keep only topk scoring predictions
-#         keep = keep[: 1000]
-#         boxes, scores = boxes[keep], scores[keep]
-#         final_boxes.append(boxes)
-#     return final_boxes
+    final_boxes = []
+    for boxes, scores, lvl, img_shape in zip(
+        proposals, objectness, levels, image_shapes
+    ):
+        boxes = box_ops.clip_boxes_to_image(boxes, img_shape)
+        keep = box_ops.remove_small_boxes(boxes, 1e-3)
+        boxes, scores, lvl = boxes[keep], scores[keep], lvl[keep]
+        # non-maximum suppression, independently done per level
+        keep = box_ops.batched_nms(boxes, scores, lvl, 0.4)
+        # keep only topk scoring predictions
+        keep = keep[: 1000]
+        boxes, scores = boxes[keep], scores[keep]
+        final_boxes.append(boxes)
+    return final_boxes
 
 def postprocess_outputs(outputs, roi_heads):
     objectness, levels, proposals = (torch.tensor(outputs['objectness'], device=torch.device('cuda')), 
                             torch.tensor(outputs['levels'], device=torch.device('cuda')), 
                             torch.tensor(outputs['proposals'], device=torch.device('cuda')))
+    # objectness, proposals = (torch.tensor(outputs['objectness'], device=torch.device('cuda')), 
+    #                     torch.tensor(outputs['proposals'], device=torch.device('cuda')))
     image_shapes = [INPUT_SHAPE[1:]]
     # final_boxes = filter_proposals(proposals, objectness, image_shapes, num_anchors_per_level)
     # nms for proposals from rpn
@@ -228,10 +235,10 @@ if __name__ == "__main__":
         inference_start_time = time.time()
         img = imgs[0]
         bboxes = []
-        (w, h) = img.size
-        scale_w, scale_h = w/INPUT_SHAPE[1], h/INPUT_SHAPE[2]
+        # (w, h) = img.size
+        # scale_w, scale_h = w/INPUT_SHAPE[1], h/INPUT_SHAPE[2]
         # preprocess img
-        orig_img, infer_img = preprocess_img(img)
+        orig_img, infer_img, resize_ratio, pad_w, pad_h = preprocess_img(img)
         # inference
         time1 = time.time()
         outputs = trt_inference_wrapper.infer(infer_img)
@@ -251,16 +258,16 @@ if __name__ == "__main__":
 
         if len(bboxes)>0:
             for box in bboxes:
-                box_coco = [round(box[0]*scale_w), 
-                            round(box[1]*scale_h), 
-                            round((box[2]*scale_w)-(box[0]*scale_w)), 
-                            round((box[3]*scale_h)-(box[1]*scale_h))]
+                box_coco = [round((box[0]-pad_w)*resize_ratio), 
+                            round((box[1]-pad_h)*resize_ratio), 
+                            round(((box[2]-pad_w)*resize_ratio)-((box[0]-pad_w)*resize_ratio)), 
+                            round(((box[3]-pad_h)*resize_ratio)-((box[1]-pad_h)*resize_ratio))]
                 score = float(box[4])
-                if score > 0.8:
-                    cv2.rectangle(orig_img, (box_coco[0], box_coco[1]), (box_coco[0]+box_coco[2], box_coco[1]+box_coco[3]), (0, 0, 255), 2)
+                # if score > 0.8:
+                #     cv2.rectangle(orig_img, (box_coco[0], box_coco[1]), (box_coco[0]+box_coco[2], box_coco[1]+box_coco[3]), (0, 0, 255), 2)
                 pred_result.append({"image_id": int(labels[0][0]['image_id']), "category_id": 1,"bbox": box_coco, "score":score})
-        cv2.imwrite('test.jpg', orig_img)
-        exit()
+        # cv2.imwrite('test.jpg', orig_img)
+        # exit()
         infer_time = time.time()-inference_start_time
         trt_time.append(infer_time)	
         interval = time.time()-p_utiltime
@@ -315,6 +322,6 @@ if __name__ == "__main__":
     cocoEval.evaluate()
     cocoEval.accumulate()
     cocoEval.summarize()
-
+    print(f"Average time forward pass: {np.mean(np.asarray(times))}")
     trt_inference_wrapper.close()
     
